@@ -10,6 +10,7 @@ module Dependabot
       require_relative "file_updater/pipfile_file_updater"
       require_relative "file_updater/pip_compile_file_updater"
       require_relative "file_updater/poetry_file_updater"
+      require_relative "file_updater/pdm_file_updater"
       require_relative "file_updater/requirement_file_updater"
 
       def self.updated_files_regex
@@ -30,6 +31,7 @@ module Dependabot
           case resolver_type
           when :pipfile then updated_pipfile_based_files
           when :poetry then updated_poetry_based_files
+          when :pdm then updated_pdm_based_files
           when :pip_compile then updated_pip_compile_based_files
           when :requirements then updated_requirement_based_files
           else raise "Unexpected resolver type: #{resolver_type}"
@@ -54,14 +56,15 @@ module Dependabot
         changed_req_files = changed_reqs.map { |r| r.fetch(:file) }
 
         # If there are no requirements then this is a sub-dependency. It
-        # must come from one of Pipenv, Poetry or pip-tools, and can't come
+        # must come from one of Pipenv, Poetry, Pdm or pip-tools, and can't come
         # from the first two unless they have a lockfile.
         return subdependency_resolver if changed_reqs.none?
 
         # Otherwise, this is a top-level dependency, and we can figure out
         # which resolver to use based on the filename of its requirements
         return :pipfile if changed_req_files.any?("Pipfile")
-        return :poetry if changed_req_files.any?("pyproject.toml")
+        return :poetry if changed_req_files.any?("poetry.lock")
+        return :pdm if changed_req_files.any?("pdm.lock")
         return :pip_compile if changed_req_files.any? { |f| f.end_with?(".in") }
 
         :requirements
@@ -70,7 +73,8 @@ module Dependabot
 
       def subdependency_resolver
         return :pipfile if pipfile_lock
-        return :poetry if poetry_lock || pyproject_lock
+        return :poetry if poetry_lock
+        return :pdm if pdm_lock
         return :pip_compile if pip_compile_files.any?
 
         raise "Claimed to be a sub-dependency, but no lockfile exists!"
@@ -86,6 +90,14 @@ module Dependabot
 
       def updated_poetry_based_files
         PoetryFileUpdater.new(
+          dependencies: dependencies,
+          dependency_files: dependency_files,
+          credentials: credentials
+        ).updated_dependency_files
+      end
+
+      def updated_pdm_based_files
+        PdmFileUpdater.new(
           dependencies: dependencies,
           dependency_files: dependency_files,
           credentials: credentials
@@ -137,6 +149,10 @@ module Dependabot
 
       def poetry_lock
         @poetry_lock ||= get_original_file("poetry.lock")
+      end
+
+      def pdm_lock
+        @pdm_lock ||= get_original_file("pdm.lock")
       end
 
       def pip_compile_files

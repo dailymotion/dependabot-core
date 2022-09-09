@@ -6,6 +6,7 @@ require "dependabot/file_fetchers"
 require "dependabot/file_fetchers/base"
 require "dependabot/python/requirement_parser"
 require "dependabot/python/file_parser/poetry_files_parser"
+require "dependabot/python/file_parser/pdm_files_parser"
 require "dependabot/errors"
 
 module Dependabot
@@ -25,7 +26,10 @@ module Dependabot
         return true if filenames.include?("Pipfile")
 
         # If this repo is using Poetry return true
-        return true if filenames.include?("pyproject.toml")
+        return true if filenames.include?("poetry.lock")
+
+        # If this repo is using Pdm return true
+        return true if filenames.include?("pdm.lock")
 
         return true if filenames.include?("setup.py")
 
@@ -69,7 +73,7 @@ module Dependabot
       end
 
       def pyproject_files
-        [pyproject, pyproject_lock, poetry_lock].compact
+        [pyproject, pyproject_lock, poetry_lock, pdm_lock].compact
       end
 
       def requirement_files
@@ -134,6 +138,10 @@ module Dependabot
 
       def poetry_lock
         @poetry_lock ||= fetch_file_if_present("poetry.lock")
+      end
+
+      def pdm_lock
+        @pdm_lock ||= fetch_file_if_present("pdm.lock")
       end
 
       def requirements_txt_files
@@ -271,6 +279,12 @@ module Dependabot
           unfetchable_files << e.file_path.gsub(%r{^/}, "")
         end
 
+        pdm_path_setup_file_paths.each do |path|
+          path_setup_files += fetch_path_setup_file(path, allow_pyproject: true)
+        rescue Dependabot::DependencyFileNotFound => e
+          unfetchable_files << e.file_path.gsub(%r{^/}, "")
+        end
+
         raise Dependabot::PathDependenciesNotReachable, unfetchable_files if unfetchable_files.any?
 
         path_setup_files
@@ -394,6 +408,23 @@ module Dependabot
           next unless parsed_pyproject.dig("tool", "poetry", dep_type)
 
           parsed_pyproject.dig("tool", "poetry", dep_type).each do |_, req|
+            next unless req.is_a?(Hash) && req["path"]
+
+            paths << req["path"]
+          end
+        end
+
+        paths
+      end
+
+      def pdm_path_setup_file_paths
+        return [] unless pyproject
+
+        paths = []
+        Dependabot::Python::FileParser::PdmFilesParser::PDM_DEPENDENCY_TYPES.each do |dep_type|
+          next unless parsed_pyproject.dig("tool", "pdm", dep_type)
+
+          parsed_pyproject.dig("tool", "pdm", dep_type).each do |_, req|
             next unless req.is_a?(Hash) && req["path"]
 
             paths << req["path"]

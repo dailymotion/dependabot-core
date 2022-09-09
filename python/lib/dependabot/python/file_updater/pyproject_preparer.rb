@@ -21,7 +21,7 @@ module Dependabot
         # For hosted Dependabot token will be nil since the credentials aren't present.
         # This is for those running Dependabot themselves and for dry-run.
         def add_auth_env_vars(credentials)
-          TomlRB.parse(@pyproject_content).dig("tool", "poetry", "source")&.each do |source|
+          TomlRB.parse(@pyproject_content).dig("tool", "poetry", "pdm", "source")&.each do |source|
             cred = credentials&.find { |c| c["index-url"] == source["url"] }
             next unless cred
 
@@ -50,6 +50,7 @@ module Dependabot
 
           pyproject_object = TomlRB.parse(pyproject_content)
           poetry_object = pyproject_object["tool"]["poetry"]
+          pdm_object = pyproject_object["tool"]["pdm"]
           excluded_names = dependencies.map(&:name) + ["python"]
 
           Dependabot::Python::FileParser::PoetryFilesParser::POETRY_DEPENDENCY_TYPES.each do |key|
@@ -74,6 +75,32 @@ module Dependabot
                 poetry_object[key][dep_name]["version"] = locked_version
               else
                 poetry_object[key][dep_name] = locked_version
+              end
+            end
+          end
+
+          Dependabot::Python::FileParser::PdmFilesParser::PDM_DEPENDENCY_TYPES.each do |key|
+            next unless pdm_object[key]
+
+            source_types = %w(directory file url)
+            pdm_object.fetch(key).each do |dep_name, _|
+              next if excluded_names.include?(normalise(dep_name))
+
+              locked_details = locked_details(dep_name)
+
+              next unless (locked_version = locked_details&.fetch("version"))
+
+              next if source_types.include?(locked_details&.dig("source", "type"))
+
+              if locked_details&.dig("source", "type") == "git"
+                pdm_object[key][dep_name] = {
+                  "git" => locked_details&.dig("source", "url"),
+                  "rev" => locked_details&.dig("source", "reference")
+                }
+              elsif pdm_object[key][dep_name].is_a?(Hash)
+                pdm_object[key][dep_name]["version"] = locked_version
+              else
+                pdm_object[key][dep_name] = locked_version
               end
             end
           end

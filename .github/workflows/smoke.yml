@@ -35,6 +35,7 @@ jobs:
           - pip-compile
           - pipenv
           - poetry
+          - pdm
           - pub
           - submodules
           - terraform
@@ -118,12 +119,12 @@ jobs:
             - 'common/**'
             - 'updater/**'
             - 'nuget/**'
-          pub:
+          poetry:
             - Dockerfile
             - Dockerfile.updater
             - 'common/**'
             - 'updater/**'
-            - 'pub/**'
+            - 'python/**'
           pip:
             - Dockerfile
             - Dockerfile.updater
@@ -148,6 +149,12 @@ jobs:
             - 'common/**'
             - 'updater/**'
             - 'python/**'
+          pdm:
+            - Dockerfile
+            - Dockerfile.updater
+            - 'common/**'
+            - 'updater/**'
+            - 'pub/**'
           submodules:
             - Dockerfile
             - Dockerfile.updater

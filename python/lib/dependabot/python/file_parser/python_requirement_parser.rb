@@ -58,9 +58,13 @@ module Dependabot
 
           pyproject_object = TomlRB.parse(pyproject.content)
           poetry_object = pyproject_object.dig("tool", "poetry")
+          pdm_object = pyproject_object.dig("tool", "pdm")
 
           poetry_object&.dig("dependencies", "python") ||
             poetry_object&.dig("dev-dependencies", "python")
+
+          pdm_object&.dig("dependencies", "python") ||
+            pdm_object&.dig("dev-dependencies", "python")
         end
 
         def python_version_file_version

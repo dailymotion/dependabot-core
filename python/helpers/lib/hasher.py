@@ -2,6 +2,7 @@ import hashin
 import json
 import pipfile
 from poetry.factory import Factory
+from pdm.core import Core
 
 
 def get_dependency_hash(dependency_name, dependency_version, algorithm):
@@ -24,3 +25,8 @@ def get_pyproject_hash(directory):
     p = Factory().create_poetry(directory)
 
     return json.dumps({"result": p.locker._get_content_hash()})
+
+def get_pdm_hash(directory):
+    p = Core().create_project(directory, True)
+
+    return json.dumps({"result": p.get_content_hash("sha256")})
